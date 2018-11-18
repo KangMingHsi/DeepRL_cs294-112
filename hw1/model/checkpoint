@@ -1,2 +1,0 @@
-model_checkpoint_path: "Ant-v2_dag.ckpt"
-all_model_checkpoint_paths: "Ant-v2_dag.ckpt"
