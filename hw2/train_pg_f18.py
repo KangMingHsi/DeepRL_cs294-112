@@ -80,6 +80,7 @@ class Agent(object):
         self.reward_to_go = estimate_return_args['reward_to_go']
         self.nn_baseline = estimate_return_args['nn_baseline']
         self.normalize_advantages = estimate_return_args['normalize_advantages']
+        self.gae_gamma = estimate_return_args['gae_gamma']
 
     def init_tf_sess(self):
         tf_config = tf.ConfigProto(inter_op_parallelism_threads=1, intra_op_parallelism_threads=1) 
@@ -186,7 +187,7 @@ class Agent(object):
         else:
             sy_mean, sy_logstd = policy_parameters
             # YOUR_CODE_HERE
-            sy_sampled_ac = sy_mean + tf.exp(sy_logstd) * tf.random_normal(shape=tf.shape(sy_mean), mean=0, stddev=1)
+            sy_sampled_ac = sy_mean + tf.exp(sy_logstd) * tf.random_normal(shape=tf.shape(sy_mean))
         return sy_sampled_ac
 
     #========================================================================================#
@@ -266,7 +267,7 @@ class Agent(object):
         #                           ----------PROBLEM 2----------
         # Loss Function and Training Operation
         #========================================================================================#
-        self.loss = -tf.reduce_mean(self.sy_logprob_n * self.sy_adv_n) # YOUR CODE HERE
+        self.loss = -tf.reduce_mean(tf.multiply(self.sy_logprob_n, self.sy_adv_n)) # YOUR CODE HERE
         self.update_op = tf.train.AdamOptimizer(self.learning_rate).minimize(self.loss)
 
         #========================================================================================#
@@ -315,7 +316,7 @@ class Agent(object):
             #                           ----------PROBLEM 3----------
             #====================================================================================#
             #raise NotImplementedError
-            ac = self.sess.run(self.sy_sampled_ac, feed_dict={self.sy_ob_no:[ob]}) # YOUR CODE HERE
+            ac = self.sess.run(self.sy_sampled_ac, feed_dict={self.sy_ob_no:ob[None]}) # YOUR CODE HERE
             ac = ac[0]
             acs.append(ac)
             ob, rew, done, _ = env.step(ac)
@@ -478,7 +479,35 @@ class Agent(object):
                     advantages whose length is the sum of the lengths of the paths
         """
         q_n = self.sum_of_rewards(re_n)
-        adv_n = self.compute_advantage(ob_no, q_n)
+        #adv_n = self.compute_advantage(ob_no, q_n)
+        
+        # lambda-gae
+        b_n = self.sess.run(self.baseline_prediction, feed_dict={self.sy_ob_no:ob_no}) # YOUR CODE HERE
+        b_n = np.mean(q_n) + np.std(q_n) * ((b_n - np.mean(b_n)) /  (np.std(b_n) + 1e-8))
+        
+        adv_n = []
+        idx = 0
+        for rewards in re_n:
+            adv = 0
+            adv_path = []
+            V_next = 0
+            idx += len(rewards)
+
+            # Dynamic programming over reversed path
+            for rew, V in zip(reversed(rewards), b_n[idx-1:None:-1]):
+                bellman_error = rew + self.gamma * V_next - V
+                adv = bellman_error + self.gae_gamma * self.gamma * adv
+                adv_path.append(adv)
+                V_next = V
+                adv_path.reverse()
+
+            # Append these advantage values
+            if not self.reward_to_go:
+                adv_path = [adv_path[0]] * len(adv_path)
+            adv_n.extend(adv_path)
+
+        q_n = b_n + adv_n
+        
         #====================================================================================#
         #                           ----------PROBLEM 3----------
         # Advantage Normalization
@@ -561,7 +590,8 @@ def train_PG(
         nn_baseline, 
         seed,
         n_layers,
-        size):
+        size,
+        gae_gamma):
 
     start = time.time()
 
@@ -615,6 +645,7 @@ def train_PG(
         'reward_to_go': reward_to_go,
         'nn_baseline': nn_baseline,
         'normalize_advantages': normalize_advantages,
+        'gae_gamma': gae_gamma,
     }
 
     agent = Agent(computation_graph_args, sample_trajectory_args, estimate_return_args)
@@ -679,6 +710,7 @@ def main():
     parser.add_argument('--n_experiments', '-e', type=int, default=1)
     parser.add_argument('--n_layers', '-l', type=int, default=2)
     parser.add_argument('--size', '-s', type=int, default=64)
+    parser.add_argument('--gae_gamma', type=float, default=1.0)
     args = parser.parse_args()
 
     if not(os.path.exists('data')):
@@ -712,7 +744,8 @@ def main():
                 nn_baseline=args.nn_baseline, 
                 seed=seed,
                 n_layers=args.n_layers,
-                size=args.size
+                size=args.size,
+                gae_gamma=args.gae_gamma
                 )
         # # Awkward hacky process runs, because Tensorflow does not like
         # # repeatedly calling train_PG in the same thread.
