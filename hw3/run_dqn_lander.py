@@ -110,7 +110,7 @@ def main():
     env = get_env(seed)
     session = get_session()
     set_global_seeds(seed)
-    lander_learn(env, session, num_timesteps=500000, seed=seed)
+    lander_learn(env, session, num_timesteps=400000, seed=seed)
 
 if __name__ == "__main__":
     main()

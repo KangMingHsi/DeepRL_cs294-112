@@ -159,7 +159,25 @@ class QLearner(object):
     ######
 
     # YOUR CODE HERE
+    q_val = q_func(obs_t_float, self.num_actions, scope="q_func", reuse=False)
+    self.greedy_action = tf.argmax(q_val, axis=1)
 
+    q_t_act = tf.reduce_sum(q_val * tf.one_hot(self.act_t_ph, self.num_actions), axis=1)
+
+    q_next_val = q_func(obs_tp1_float, self.num_actions, scope="target_q_func", reuse=False)
+
+    if double_q:
+      double_q_val = q_func(obs_tp1_float, self.num_actions, scope="q_func", reuse=True)
+      double_q_action = tf.argmax(double_q_val, axis=1)
+      self.target_action = tf.reduce_sum(q_next_val * tf.one_hot(double_q_action, self.num_actions), axis=1)
+    else:
+      self.target_action = tf.reduce_max(q_next_val, axis=1)
+    
+    bellman = self.rew_t_ph + (1.0 - self.done_mask_ph) * gamma * tf.stop_gradient(self.target_action)
+    self.total_error = tf.reduce_mean(huber_loss(bellman - q_t_act))
+
+    q_func_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='q_func')
+    target_q_func_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='target_q_func')
     ######
 
     # construct optimization op (with gradient clipping)
@@ -230,6 +248,22 @@ class QLearner(object):
 
     # YOUR CODE HERE
 
+    idx = self.replay_buffer.store_frame(self.last_obs)
+    
+    if not self.model_initialized or random.random() < self.exploration.value(self.t):
+      action = self.env.action_space.sample()
+    else:
+      obs = self.replay_buffer.encode_recent_observation()
+      action = self.session.run(self.greedy_action, feed_dict={self.obs_t_ph: [obs]})[0]
+
+    obs, reward, done, info = self.env.step(action)
+    
+    if done:
+      obs = self.env.reset()
+
+    self.replay_buffer.store_effect(idx, action, reward, done)
+    self.last_obs = obs
+
   def update_model(self):
     ### 3. Perform experience replay and train the network.
     # note that this is only done if the replay buffer contains enough samples
@@ -274,8 +308,29 @@ class QLearner(object):
       #####
 
       # YOUR CODE HERE
+      obs_t_batch, act_batch, rew_batch, obs_tp1_batch, done_mask = self.replay_buffer.sample(self.batch_size)
+
+      if not self.model_initialized:
+        self.model_initialized = True
+        initialize_interdependent_variables(self.session, tf.global_variables(), {
+              self.obs_t_ph: obs_t_batch,
+              self.obs_tp1_ph: obs_tp1_batch,
+        })
+
+      self.session.run(self.train_fn, feed_dict=
+      {
+        self.obs_t_ph:obs_t_batch,
+        self.obs_tp1_ph: obs_tp1_batch,
+        self.act_t_ph:act_batch,
+        self.rew_t_ph:rew_batch,
+        self.done_mask_ph:done_mask,
+        self.learning_rate:self.optimizer_spec.lr_schedule.value(self.t)
+      })
 
       self.num_param_updates += 1
+
+      if self.num_param_updates % self.target_update_freq == 0:
+        self.session.run(self.update_target_fn)
 
     self.t += 1
 
