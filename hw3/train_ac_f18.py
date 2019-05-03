@@ -335,7 +335,7 @@ class Agent(object):
         V = self.sess.run(self.critic_prediction, feed_dict={self.sy_ob_no:ob_no})
         V_next = self.sess.run(self.critic_prediction, feed_dict={self.sy_ob_no:next_ob_no})
 
-        Q = re_n + (terminal_n == 0) * self.gamma * V_next
+        Q = re_n + (1 - terminal_n) * self.gamma * V_next
 
         adv_n = Q - V
 
@@ -376,7 +376,7 @@ class Agent(object):
         for i in range(n):
             if i % self.num_grad_steps_per_target_update == 0:
                 V_next = self.sess.run(self.critic_prediction, feed_dict={self.sy_ob_no:next_ob_no})
-                target = re_n + (terminal_n == 0) * self.gamma * V_next
+                target = re_n + (1 - terminal_n) * self.gamma * V_next
             self.sess.run(self.critic_update_op, feed_dict={self.sy_ob_no:ob_no, self.sy_target_n:target})
 
     def update_actor(self, ob_no, ac_na, adv_n):
