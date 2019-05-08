@@ -536,18 +536,18 @@ def train_AC(
             if dm == 'ex2':
                 ### PROBLEM 3
                 ### YOUR CODE HERE
-                raise NotImplementedError
+                ll, kl, elbo = exploration.fit_density_model(ob_no)
             elif dm == 'hist' or dm == 'rbf':
                 ### PROBLEM 1
                 ### YOUR CODE HERE
-                raise NotImplementedError
+                exploration.fit_density_model(ob_no)
             else:
                 assert False
 
             # 2. Modify the reward
             ### PROBLEM 1
             ### YOUR CODE HERE
-            raise NotImplementedError
+            re_n = exploration.modify_reward(old_re_n, ob_no)
 
             print('average state', np.mean(ob_no, axis=0))
             print('average action', np.mean(ac_na, axis=0))
@@ -591,9 +591,10 @@ def train_AC(
         logz.log_tabular("TimestepsThisBatch", timesteps_this_batch)
         logz.log_tabular("TimestepsSoFar", total_timesteps)
         logz.dump_tabular()
-        logz.pickle_tf_vars()
+        logz.pickle_tf_vars() 
+        
 
-def main():
+if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('env_name', type=str)
@@ -644,37 +645,37 @@ def main():
 
         def train_func():
             train_AC(
-                exp_name=args.exp_name,
-                env_name=args.env_name,
-                n_iter=args.n_iter,
-                gamma=args.discount,
-                min_timesteps_per_batch=args.batch_size,
-                max_path_length=max_path_length,
-                learning_rate=args.learning_rate,
-                num_target_updates=args.num_target_updates,
-                num_grad_steps_per_target_update=args.num_grad_steps_per_target_update,
-                animate=args.render,
-                logdir=os.path.join(logdir,'%d'%seed),
-                normalize_advantages=not(args.dont_normalize_advantages),
-                seed=seed,
-                n_layers=args.n_layers,
-                size=args.size,
-                ########################################################################
-                bonus_coeff=args.bonus_coeff,
-                kl_weight=args.kl_weight,
-                density_lr=args.density_lr,
-                density_train_iters=args.density_train_iters,
-                density_batch_size=args.density_batch_size,
-                density_hiddim=args.density_hiddim,
-                dm=args.density_model,
-                replay_size=args.replay_size,
-                sigma=args.sigma
+                
                 ########################################################################
                 )
 
         # # Awkward hacky process runs, because Tensorflow does not like
         # # repeatedly calling train_AC in the same thread.
-        p = Process(target=train_func, args=tuple())
+        p = Process(target=train_AC, args=(args.exp_name,
+                args.env_name,
+                args.n_iter,
+                args.discount,
+                args.batch_size,
+                max_path_length,
+                args.learning_rate,
+                args.num_target_updates,
+                args.num_grad_steps_per_target_update,
+                args.render,
+                os.path.join(logdir,'%d'%seed),
+                not(args.dont_normalize_advantages),
+                seed,
+                args.n_layers,
+                args.size,
+                ########################################################################
+                args.bonus_coeff,
+                args.kl_weight,
+                args.density_lr,
+                args.density_train_iters,
+                args.density_batch_size,
+                args.density_hiddim,
+                args.density_model,
+                args.replay_size,
+                args.sigma))
         p.start()
         processes.append(p)
         # if you comment in the line below, then the loop will block 
@@ -683,7 +684,3 @@ def main():
 
     for p in processes:
         p.join()
-        
-
-if __name__ == "__main__":
-    main()

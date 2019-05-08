@@ -137,6 +137,24 @@ class ModelBasedPolicy(object):
         costs = tf.zeros([self._num_random_action_selection, 1])
         states = tf.tile(state_ph, [self._num_random_action_selection, 1])
         random_action_seqs = tf.random_uniform(minval=self._action_space_low, maxval=self._action_space_high, shape=[self._num_random_action_selection, self._horizon, self._action_dim], dtype=tf.float32)
+        
+        # mu = (self._action_space_low + self._action_space_high) / 2
+        # sigma2 = 100.0
+        # t = 0
+        # maxits = 100
+        # Ne = self._num_random_action_selection // 10
+        
+        # while t < maxits:
+        #     action_X = tf.random_normal(mean=mu, stddev=tf.sqrt(sigma2), shape=(self._num_random_action_selection, self._action_dim), dtype=tf.float32)
+        #     next_state_pred = self._dynamics_func(states, action_X, reuse=True)
+        #     S = self._cost_fn(states, action_X, next_state_pred)
+            
+        #     order = tf.argsort(S)
+        #     action_X = tf.gather(action_X, order)
+        #     mu, sigma2 = tf.nn.moments(action_X[:Ne-1], [0])
+        #     t = t+1
+        
+        # best_action = tf.random_normal(mean=mu, stddev=tf.sqrt(sigma2), shape=[self._action_dim,], dtype=tf.float32)
 
         for t in range(self._horizon):
             actions = random_action_seqs[:,t,:]
