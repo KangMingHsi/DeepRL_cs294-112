@@ -103,24 +103,44 @@ class SAC:
         )
 
     def _policy_loss_for(self, policy, q_function, q_function2, value_function):
+
+        actions, log_pis = policy(self._observations_ph)
+            
+        if q_function2 is not None:
+            q_values = tf.minimum(tf.squeeze(q_function((self._observations_ph, actions)), axis=1), tf.squeeze(q_function2((self._observations_ph, actions)), axis=1))
+        else:
+            q_values = tf.squeeze(q_function((self._observations_ph, actions)), axis=1)
+
         if not self._reparameterize:
             ### Problem 1.3.A
             ### YOUR CODE HERE
-            raise NotImplementedError
+            values = tf.squeeze(value_function(self._observations_ph), axis=1)
+            return tf.reduce_mean(log_pis * tf.stop_gradient(self._alpha * log_pis - q_values + values))
         else:
             ### Problem 1.3.B
             ### YOUR CODE HERE
-            raise NotImplementedError
+            return tf.reduce_mean(self._alpha * log_pis - q_values)
 
     def _value_function_loss_for(self, policy, q_function, q_function2, value_function):
         ### Problem 1.2.A
         ### YOUR CODE HERE
-        raise NotImplementedError
+        actions, log_pis = policy(self._observations_ph)
+            
+        if q_function2 is not None:
+            q_values = tf.minimum(tf.squeeze(q_function((self._observations_ph, actions)), axis=1), tf.squeeze(q_function2((self._observations_ph, actions)), axis=1))
+        else:
+            q_values = tf.squeeze(q_function((self._observations_ph, actions)), axis=1)
+        values = tf.squeeze(value_function(self._observations_ph), axis=1)
+
+        return tf.losses.mean_squared_error(values, (q_values - self._alpha * log_pis))
 
     def _q_function_loss_for(self, q_function, target_value_function):
         ### Problem 1.1.A
         ### YOUR CODE HERE
-        raise NotImplementedError
+        q_values = tf.squeeze(q_function((self._observations_ph, self._actions_ph)), axis=1)
+        target_values = tf.squeeze(target_value_function(self._next_observations_ph), axis=1)
+
+        return tf.losses.mean_squared_error(q_values, (self._rewards_ph + (1-self._terminals_ph) * self._discount * target_values))
 
     def _create_target_update(self, source, target):
         """Create tensorflow operations for updating target value function."""

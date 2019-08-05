@@ -12,25 +12,25 @@ import utils
 
 from multiprocessing import Process
 
-def train_SAC(env_name, exp_name, seed, logdir):
+def train_SAC(args, seed, logdir):
     alpha = {
         'Ant-v2': 0.1,
         'HalfCheetah-v2': 0.2,
         'Hopper-v2': 0.2,
         'Humanoid-v2': 0.05,
         'Walker2d-v2': 0.2,
-    }.get(env_name, 0.2)
+    }.get(args.env_name, 0.2)
 
     algorithm_params = {
         'alpha': alpha,
         'batch_size': 256,
         'discount': 0.99,
         'learning_rate': 1e-3,
-        'reparameterize': False,
+        'reparameterize': args.reparam,
         'tau': 0.01,
         'epoch_length': 1000,
         'n_epochs': 500,
-        'two_qf': False,
+        'two_qf': args.two_qf,
     }
     sampler_params = {
         'max_episode_length': 1000,
@@ -54,8 +54,8 @@ def train_SAC(env_name, exp_name, seed, logdir):
 
     logz.configure_output_dir(logdir)
     params = {
-        'exp_name': exp_name,
-        'env_name': env_name,
+        'exp_name': args.env_name,
+        'env_name': args.env_name,
         'algorithm_params': algorithm_params,
         'sampler_params': sampler_params,
         'replay_pool_params': replay_pool_params,
@@ -65,7 +65,7 @@ def train_SAC(env_name, exp_name, seed, logdir):
     }
     logz.save_params(params)
 
-    env = gym.envs.make(env_name)
+    env = gym.envs.make(args.env_name)
     # Set random seeds
     tf.set_random_seed(seed)
     np.random.seed(seed)
@@ -116,19 +116,21 @@ def train_SAC(env_name, exp_name, seed, logdir):
                 logz.log_tabular(k, v)
             logz.dump_tabular()
 
-def main():
+if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--env_name', type=str, default='HalfCheetah-v2')
     parser.add_argument('--exp_name', type=str, default=None)
     parser.add_argument('--seed', type=int, default=1)
     parser.add_argument('--n_experiments', '-e', type=int, default=1)
+    parser.add_argument('--reparam', action='store_true')
+    parser.add_argument('--two_qf', action='store_true')
     args = parser.parse_args()
 
     data_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'data')
 
     if not (os.path.exists(data_path)):
         os.makedirs(data_path)
-    logdir = 'sac_' + args.env_name + '_' + args.exp_name + '_' + time.strftime("%d-%m-%Y_%H-%M-%S")
+    logdir = 'sac_' + args.env_name + '_' + args.exp_name# + '_' + time.strftime("%d-%m-%Y_%H-%M-%S")
     logdir = os.path.join(data_path, logdir)
 
     processes = []
@@ -137,16 +139,9 @@ def main():
         seed = args.seed + 10*e
         print('Running experiment with seed %d'%seed)
 
-        def train_func():
-            train_SAC(
-                env_name=args.env_name,
-                exp_name=args.exp_name,
-                seed=seed,
-                logdir=os.path.join(logdir, '%d' % seed),
-            )
         # # Awkward hacky process runs, because Tensorflow does not like
         # # repeatedly calling train_AC in the same thread.
-        p = Process(target=train_func, args=tuple())
+        p = Process(target=train_SAC, args=(args, seed, os.path.join(logdir, '%d' % seed)))
         p.start()
         processes.append(p)
         # if you comment in the line below, then the loop will block
@@ -155,6 +150,3 @@ def main():
 
     for p in processes:
         p.join()
-
-if __name__ == '__main__':
-    main()

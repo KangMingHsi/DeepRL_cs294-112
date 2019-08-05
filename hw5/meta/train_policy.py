@@ -74,7 +74,10 @@ def build_rnn(x, h, output_size, scope, n_layers, size, activation=tf.tanh, outp
     #====================================================================================#
     #                           ----------PROBLEM 2----------
     #====================================================================================#
-    # YOUR CODE HERE
+    x = build_mlp(x, output_size, scope, n_layers, size, activation, output_activation, regularizer)
+    gru = tf.keras.layers.GRU(output_size, activation=activation, return_sequences=False, return_state=True)
+    x, h = gru(x, h)
+    return x, h
 
 def build_policy(x, h, output_size, scope, n_layers, size, gru_size, recurrent=True, activation=tf.tanh, output_activation=None):
     """
@@ -377,27 +380,27 @@ class Agent(object):
                 # first meta ob has only the observation
                 # set a, r, d to zero, construct first meta observation in meta_obs
                 # YOUR CODE HERE
-
+                meta_obs[self.history + ep_steps - 1, :self.ob_dim] = ob
                 steps += 1
 
             # index into the meta_obs array to get the window that ends with the current timestep
             # please name the windowed observation `in_` for compatibilty with the code that adds to the replay buffer (lines 418, 420)
             # YOUR CODE HERE
-
+            in_ = meta_obs[ep_steps:self.history + ep_steps]
             hidden = np.zeros((1, self.gru_size), dtype=np.float32)
 
             # get action from the policy
             # YOUR CODE HERE
-
+            ac = self.sess.run(self.sy_sampled_ac, feed_dict={self.sy_ob_no:[in_], self.sy_hidden:hidden})[0]
             # step the environment
             # YOUR CODE HERE
-
+            next_ob, rew, done, _ = env.step(ac)
             ep_steps += 1
 
             done = bool(done) or ep_steps == self.max_path_length
             # construct the meta-observation and add it to meta_obs
             # YOUR CODE HERE
-
+            meta_obs[self.history + ep_steps - 1] = np.concatenate((next_ob, ac, [rew], [done]))
             rewards.append(rew)
             steps += 1
 
@@ -764,7 +767,7 @@ def train_PG(
         logz.pickle_tf_vars()
 
 
-def main():
+if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('env_name', type=str)
@@ -805,34 +808,32 @@ def main():
         seed = args.seed + 10*e
         print('Running experiment with seed %d'%seed)
 
-        def train_func():
-            train_PG(
-                exp_name=args.exp_name,
-                env_name=args.env_name,
-                n_iter=args.n_iter,
-                gamma=args.discount,
-                min_timesteps_per_batch=args.batch_size // args.num_tasks,
-                mini_batch_size=args.mini_batch_size,
-                max_path_length=max_path_length,
-                learning_rate=args.learning_rate,
-                num_ppo_updates=(args.batch_size // args.mini_batch_size) * 5,
-                num_value_iters=args.num_value_iters,
-                animate=args.render,
-                logdir=os.path.join(logdir,'%d'%seed),
-                normalize_advantages=not(args.dont_normalize_advantages),
-                nn_critic=args.nn_critic,
-                seed=seed,
-                n_layers=args.n_layers,
-                size=args.size,
-                gru_size=args.gru_size,
-                history=args.history,
-                num_tasks=args.num_tasks,
-                l2reg=args.l2reg,
-                recurrent=args.recurrent,
-                )
         # # Awkward hacky process runs, because Tensorflow does not like
         # # repeatedly calling train_PG in the same thread.
-        p = Process(target=train_func, args=tuple())
+        p = Process(target=train_PG, args=(
+                args.exp_name,
+                args.env_name,
+                args.n_iter,
+                args.discount,
+                args.batch_size // args.num_tasks,
+                args.mini_batch_size,
+                max_path_length,
+                args.learning_rate,
+                (args.batch_size // args.mini_batch_size) * 5,
+                args.num_value_iters,
+                args.render,
+                os.path.join(logdir,'%d'%seed),
+                not(args.dont_normalize_advantages),
+                args.nn_critic,
+                seed,
+                args.n_layers,
+                args.size,
+                args.gru_size,
+                args.history,
+                args.num_tasks,
+                args.l2reg,
+                args.recurrent,
+                ))
         p.start()
         processes.append(p)
         # if you comment in the line below, then the loop will block
@@ -841,7 +842,3 @@ def main():
 
     for p in processes:
         p.join()
-
-
-if __name__ == "__main__":
-    main()

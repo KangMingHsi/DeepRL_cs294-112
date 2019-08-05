@@ -27,8 +27,14 @@ class PointEnv(Env):
         #                           ----------PROBLEM 3----------
         #====================================================================================#
         # YOUR CODE HERE
-        x = np.random.uniform(-10, 10)
-        y = np.random.uniform(-10, 10)
+        if is_evaluation:
+            x0 = np.random.choice(np.arange(-10, 10, 1))
+            y0 = np.random.choice(np.arange(-10 + x0 + 1, 10, 2))
+        else:
+            x0 = np.random.choice(np.arange(-10, 10, 1))
+            y0 = np.random.choice(np.arange(-10 + x0 + 2, 10, 2))
+        x = np.random.uniform(x0, x0+1)
+        y = np.random.uniform(y0, y0+1)
         self._goal = np.array([x, y])
 
     def reset(self):
